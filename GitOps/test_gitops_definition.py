@@ -1,12 +1,12 @@
 '''
-測試gitops_definitions
+測試GitOps_definitions
 '''
 import os
 import shutil
 import stat
-import time
+from datetime import datetime
 import pytest
-from gitops_definition import Gitops
+from gitops_definition import GitOps
 
 class TestGit:
     '''
@@ -51,14 +51,6 @@ class TestGit:
         file_count = sum(1 for file_name in all_files if file_name in files)
         return file_count
 
-    def clone(self):
-        '''
-        執行 git clone
-        '''
-        os.makedirs(self.test_repo_path, exist_ok=True)
-        git_operations = Gitops(self.remote_repo_url, self.test_repo_path, branch=self.branch, clone_or_not=True)
-        return git_operations
-
     @pytest.mark.parametrize(
         "untracked, modified",
         [
@@ -75,10 +67,10 @@ class TestGit:
         '''
 
         create_file = "pytest.txt"  # newly created
-        modify_file = "ok.txt"      # needs to be a file already exists
-        delete_file = "test.py"     # needs to be a file already exists
+        modify_file = "ok.txt"      # needs to be any file that's already exists
+        delete_file = "test.py"     # needs to be any file that's already exists
 
-        git_operations = self.clone()
+        git_operations = GitOps(self.remote_repo_url, self.test_repo_path, branch=self.branch)
         with open(os.path.join(self.test_repo_path, create_file), "w", encoding="utf-8") as file:
             file.write("This is a sample file created using Python")
         with open(os.path.join(self.test_repo_path, modify_file), "w", encoding="utf-8") as file:
@@ -95,10 +87,10 @@ class TestGit:
         測試commit message與是否成功上傳
         測試upload新檔案是否成功上傳
         '''
-        timestamp = int(time.time())
-        create_file = f"file_{timestamp}.txt"
-        commit_message = f"new commit at {timestamp}"
-        git_operations = self.clone()
+        formatted_time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        create_file = f"file_{formatted_time}.txt"
+        commit_message = f"new commit at {formatted_time}"
+        git_operations = GitOps(self.remote_repo_url, self.test_repo_path, branch=self.branch)
 
         with open(os.path.join(self.test_repo_path, create_file), "w", encoding="utf-8") as file:
             file.write("testing")
@@ -108,7 +100,7 @@ class TestGit:
         git_operations.close_repository()
 
         self.teardown_method()
-        git_operations = self.clone()
+        git_operations = GitOps(self.remote_repo_url, self.test_repo_path, branch=self.branch)
         assert os.path.exists(os.path.join(self.test_repo_path, create_file))
         assert commit_message == git_operations.repo.head.commit.message
         git_operations.close_repository()
