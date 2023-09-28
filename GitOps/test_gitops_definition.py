@@ -6,7 +6,7 @@ import shutil
 import stat
 from datetime import datetime
 import pytest
-from gitops_definition import GitOps
+from gitops import GitOps
 
 class TestGit:
     '''
@@ -18,9 +18,10 @@ class TestGit:
         '''
         self.test_repo_path = r"C:\Users\user\Downloads\giteapy_testing"
         self.remote_repo_url = "https://gitea.com/zack1284/giteapy_testing.git"
-        self.branch = None # if None = main/master  
+        self.branch = "main" # if None = main/master  
         if os.path.exists(self.test_repo_path):
             shutil.rmtree(self.test_repo_path, onerror=self.remove_readonly)
+            
 
     def teardown_method(self):
         '''
@@ -43,23 +44,28 @@ class TestGit:
         except Exception as error_exception:
             print(f"Error while removing directory or file: {error_exception}")
 
-    def count_git_add_files(self, git_operations, *files, untracked=True, modified=True):
+    def count_git_add_files(self, git_operations, untracked, modified, delete):
         '''
         用於計算git add 的檔案數量
         '''
-        all_files = git_operations.add_files(untracked=untracked, modified=modified)
-        file_count = sum(1 for file_name in all_files if file_name in files)
+        all_files = git_operations.add_files(untracked=untracked, modified=modified, delete=delete)
+        file_count = len(all_files)
         return file_count
 
     @pytest.mark.parametrize(
-        "untracked, modified",
-        [
-            (False, True),  # Scenario 2: Files Modified Only
-            (True, True),   # Scenario 3: Files added Only
-            (True, False),  # Files added or deleted
+        "untracked, modified, delete",
+        [   (False, False, False), #0
+            (False, True, False), #1
+            (False, True, True),  #2
+            (True, False, False), #1
+            (True, False, True), #2
+            (True, True, False), #2
+            (True, True, True),  #3
+            (False,False,True) #1
         ],
     )
-    def test_add_file(self, untracked, modified):
+    @pytest.mark.addfiles
+    def test_add_file(self, untracked, modified, delete):
         '''
         將git add 的檔案區分成新增(untracked), 修改(modified), 刪除(deleted)
         透過untracked, modified去設定需要Push什麼
@@ -79,13 +85,32 @@ class TestGit:
         if os.path.exists(os.path.join(self.test_repo_path, delete_file)):
             os.remove(os.path.join(self.test_repo_path, delete_file))
 
-        expected_file_count = 2 if (untracked and modified) else 1
-        assert self.count_git_add_files(git_operations, create_file, modify_file, untracked=untracked, modified=modified) == expected_file_count
 
-    def test_commit_upload(self):
+        if (untracked and modified and delete):
+            expected_file_count = 3
+        elif (untracked and modified) and not delete:
+            expected_file_count = 2
+        elif (untracked and delete) and not modified:
+            expected_file_count = 2
+        elif (modified and delete) and not untracked:
+            expected_file_count = 2
+        elif not (untracked and modified) and delete:
+            expected_file_count = 1
+        elif not (untracked and delete) and modified:
+            expected_file_count = 1
+        elif not (modified and delete) and untracked:
+            expected_file_count = 1
+        else:
+            expected_file_count = 0
+
+        assert self.count_git_add_files(git_operations, untracked=untracked, modified=modified, delete=delete) == expected_file_count
+
+
+    @pytest.mark.commit_push
+    def test_commit_push(self):
         '''
         測試commit message與是否成功上傳
-        測試upload新檔案是否成功上傳
+        測試push新檔案是否成功上傳
         '''
         formatted_time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         create_file = f"file_{formatted_time}.txt"
@@ -96,11 +121,24 @@ class TestGit:
             file.write("testing")
 
         git_operations.add_files(untracked=True, modified=True)
-        git_operations.commit_upload(branch=self.branch, commit_messages=commit_message)
+        git_operations.commit(commit_messages=commit_message)
+        git_operations.push(branch=self.branch, origin="origin")
         git_operations.close_repository()
 
         self.teardown_method()
         git_operations = GitOps(self.remote_repo_url, self.test_repo_path, branch=self.branch)
         assert os.path.exists(os.path.join(self.test_repo_path, create_file))
         assert commit_message == git_operations.repo.head.commit.message
+        git_operations.close_repository()
+
+    @pytest.mark.newbranch_checkout
+    def test_newbranch_checkout(self):
+        '''
+        測試切換分支
+        '''
+        git_operations = GitOps(self.remote_repo_url, self.test_repo_path, branch=self.branch)
+        git_operations.create_new_branch('test_branch')
+        assert git_operations.repo.active_branch.name == 'test_branch'     
+        git_operations.checkout(checkout_branch='main')
+        assert git_operations.repo.active_branch.name == 'main' 
         git_operations.close_repository()

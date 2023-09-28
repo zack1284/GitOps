@@ -1,8 +1,17 @@
-import git
-import os.path
 
-repopath = 'https://gitea.com/zack1284/giteapy_testing.git'
-repo = git.Repo(repopath)
-repo.git.archive('<tag>', '-o', '<tag>.zip')
-if os.path.exists('<tag>.zip'):
-    pass
+import operator as op
+
+
+bl = ['backup']
+
+ls = '2015_7BACKUP'
+
+
+for i in bl:
+    res=op.contains(ls, i)
+    print(res)
+
+
+dct = {'a':['abc','bcd']}
+
+print(dct['a'])
